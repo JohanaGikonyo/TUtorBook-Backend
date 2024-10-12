@@ -3,21 +3,22 @@ const mongoose = require("mongoose");
 const path = require("path");
 const http = require("http");
 const socketIo = require("socket.io");
-const cors = require("cors"); // Import cors
+const bodyParser = require("body-parser");
+const cors = require("cors");
 require("dotenv").config();
 
 const app = express();
 const port = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors()); // Enable CORS
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
+app.use(cors());
+app.use(express.json({ limit: "100mb" }));
+app.use(express.urlencoded({ limit: "100mb", extended: true }));
 // Serve static files from 'uploads' directory
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/userImage", express.static("userImage"));
 
-// Database connection (without deprecated options)
+// Database connection
 mongoose
   .connect(process.env.DATABASE_URL)
   .then(() => {
@@ -37,7 +38,7 @@ app.use("/api/interactions", require("./routes/interactions"));
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).send("Something broke!");
+  res.status(500).json({ error: "Something broke!" });
 });
 
 // Create HTTP server and setup Socket.IO
@@ -58,6 +59,12 @@ app.set("socketio", io);
 app.get("/", (req, res) => {
   res.json({ message: "Server Nicely running!" });
 });
+
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "OK" });
+});
+
 // Start server
 server.listen(port, () => {
   console.log(`Server is running on port ${port}`);

@@ -6,30 +6,32 @@ const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const path = require("path");
 
-// Setup multer for file uploads
+// Load JWT_SECRET from environment variables
+const JWT_SECRET = process.env.JWT_SECRET || "qwerthjfds56";
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/");
+  destination: function (req, file, cb) {
+    cb(null, "uploads/"); // Adjust the destination as needed
   },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + "-" + file.originalname); // Unique filename
   },
 });
 
-const upload = multer({ storage });
-
-// Load JWT_SECRET from environment variables
-const JWT_SECRET = process.env.JWT_SECRET || "qwerthjfds56";
-
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // Set limit to 50 MB
+});
+// upload.single("photo"),
 // Register new user with profile image upload
-router.post("/register", upload.single("photo"), async (req, res) => {
+router.post("/register", async (req, res) => {
+  console.log("Trying to register");
+  console.log("req body ", req.body);
+  const photo = req.body.photo;
   const { name, email, password, year, course, institution, graduationYear, phone } = req.body;
-  const profileImage = req.file ? req.file.path : null; // Getting the uploaded file path
-  console.log("Profile Image Path:", profileImage);
 
   // Check if all required fields are provided
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: "Name, email, password" });
+  if (!name || !email || !password || !photo) {
+    return res.status(400).json({ error: "Name, email, and password are required." });
   }
 
   try {
@@ -52,7 +54,7 @@ router.post("/register", upload.single("photo"), async (req, res) => {
       institution,
       graduationYear,
       phone,
-      photo: profileImage, // Store the uploaded image path
+      photo,
     });
 
     // Save user to the database
@@ -117,7 +119,7 @@ router.post("/login", async (req, res) => {
         institution: user.institution,
         graduationYear: user.graduationYear,
         phone: user.phone,
-        profileImage: user.profileImage,
+        profileImage: user.photo,
       },
     });
   } catch (error) {
@@ -137,32 +139,35 @@ router.get("/getUsers", async (req, res) => {
 });
 
 // Update user profile
-router.put("/updateProfile", upload.single("profileImage"), async (req, res) => {
-  const { name, email, year, course, institution, graduationYear, phone } = req.body;
-  const profileImage = req.file ? req.file.path : null;
 
+router.post("/updateProfile/:userId", upload.single("photo"), async (req, res) => {
   try {
-    // Find the user by ID from the token
-    const token = req.headers.authorization.split(" ")[1];
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const userId = decoded.userId;
+    const { userId } = req.params;
+    const photo = req.body.photo; // Multer handles file uploads
 
+    console.log("Received file:", photo);
+    const { name, email, year, course, institution, graduationYear, phone } = req.body;
+
+    console.log("Ready to update user", name, email, year);
     // Find the user and update the provided fields
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      {
-        name,
-        email,
-        year,
-        course,
-        institution,
-        graduationYear,
-        phone,
-        ...(profileImage && { profileImage }), // Only update image if provided
-      },
-      { new: true } // Return the updated document
-    );
 
+      {
+        $set: {
+          name: name,
+          email: email,
+          year: year,
+          course: course,
+          institution: institution,
+          graduationYear: graduationYear,
+          phone: phone,
+          photo: photo,
+        },
+      },
+      { new: true }
+    ); // Return the updated document
+    // console.log("Updated values:", updatedUser);
     if (!updatedUser) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -178,7 +183,7 @@ router.put("/updateProfile", upload.single("profileImage"), async (req, res) => 
         institution: updatedUser.institution,
         graduationYear: updatedUser.graduationYear,
         phone: updatedUser.phone,
-        profileImage: updatedUser.profileImage,
+        profileImage: updatedUser.photo, // Send updated image path
       },
     });
   } catch (error) {
