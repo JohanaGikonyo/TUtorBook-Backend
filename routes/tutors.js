@@ -3,62 +3,146 @@ const router = express.Router();
 const Tutor = require("../models/Tutor");
 const multer = require("multer");
 const bcrypt = require("bcryptjs");
-
+const jwt = require("jsonwebtoken");
+const secretKey = process.env.JWT_SECRET || "qwerthjfds56";
 // Configure multer for file uploads (for photo and qualifications)
 const upload = multer({ dest: "uploads/" });
 
 // Register a new tutor
 router.post("/register", async (req, res) => {
   try {
-    console.log(req.body.name, req.body.email, req.body.qualifications);
     const { name, email, phone, institution, course, password, qualifications, photo } = req.body;
 
     const existingUser = await Tutor.findOne({ email });
+
     if (existingUser) {
-      console.log("Tutor exists");
       return res.status(400).json({ error: "You are already a tutor." });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // If you have qualifications as files, use multer or base64
     const newTutor = new Tutor({
-      name: name,
-      email: email,
-      phone: phone,
-      institution: institution,
-      qualifications: qualifications, // Assuming qualifications is a string, modify if it's a file
-      photo: photo, // Storing the path of the uploaded file
-      course: course,
+      name,
+      email,
+      phone,
+      institution,
+      course,
+      qualifications,
+      photo,
       password: hashedPassword,
     });
 
     await newTutor.save();
-    console.log("Saved Tutor");
+
+    // Generate JWT token
+    const Tutortoken = jwt.sign({ id: newTutor._id }, secretKey, { expiresIn: "1h" });
+
     res.status(201).json({
       message: "Tutor registered successfully",
-      user: {
+      Tutortoken,
+      tutorDetails: {
         id: newTutor._id,
         name: newTutor.name,
         email: newTutor.email,
         institution: newTutor.institution,
         course: newTutor.course,
         phone: newTutor.phone,
-        photo: newTutor.photo, // Path to the saved photo
+        photo: newTutor.photo,
         qualifications: newTutor.qualifications,
       },
     });
   } catch (error) {
-    console.log("An error has occurred");
     res.status(500).json({ message: "Error registering tutor", error });
   }
 });
+
+router.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    const tutor = await Tutor.findOne({ email });
+    if (!tutor) {
+      return res.status(404).json({ error: "Tutor not found" });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, tutor.password);
+    if (!isPasswordValid) {
+      console.log("Invalid email");
+      return res.status(401).json({ error: "Invalid password" });
+    }
+
+    // Generate JWT token
+    const Tutortoken = jwt.sign({ id: tutor._id }, secretKey, { expiresIn: "1h" });
+
+    res.status(201).json({
+      Tutortoken,
+      tutorDetails: {
+        id: tutor.id,
+        name: tutor.name,
+        email: tutor.email,
+        institution: tutor.institution,
+        course: tutor.course,
+        phone: tutor.phone,
+        photo: tutor.photo,
+        qualifications: tutor.qualifications,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.get("/gettutors", async (req, res) => {
   try {
     const tutors = await Tutor.find(); // Adjust based on your actual User model method
     res.json(tutors);
   } catch (error) {
     console.error("Error fetching tutors:", error.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/editTutor/:tutor_id", async (req, res) => {
+  const { tutor_id } = req.params;
+  const { name, email, institution, course, phone, qualifications, password, photo } = req.body;
+
+  console.log(tutor_id); // Check the tutor_id value
+  try {
+    let processedPhoto = photo;
+
+    if (photo.startsWith("data:image/jpeg;base64,data:image/jpeg;base64,")) {
+      processedPhoto = photo.replace("data:image/jpeg;base64,data:image/jpeg;base64,", "data:image/jpeg;base64,");
+    } else if (!photo.startsWith("data:image/jpeg;base64,")) {
+      processedPhoto = `data:image/jpeg;base64,${photo}`;
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const updatedTutor = await Tutor.findByIdAndUpdate(
+      tutor_id,
+      {
+        $set: {
+          name: name,
+          email: email,
+          institution: institution,
+          course: course,
+          phone: phone,
+          qualifications: qualifications,
+          password: hashedPassword,
+          photo: processedPhoto,
+        },
+      },
+      { new: true }
+    ); // Ensures the updated document is returned
+
+    if (!updatedTutor) {
+      return res.status(404).json({ error: "Tutor not found" });
+    }
+
+    // Return the updated tutor directly from the update operation
+    res.status(201).json(updatedTutor);
+  } catch (error) {
+    console.error("Error updating tutor:", error.message);
     res.status(500).json({ error: "Internal server error" });
   }
 });
