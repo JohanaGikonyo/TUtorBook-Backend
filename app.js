@@ -34,6 +34,7 @@ app.use("/api/videos", require("./routes/videos"));
 app.use("/api/tutors", require("./routes/tutors"));
 app.use("/api/images", require("./routes/images"));
 app.use("/api/interactions", require("./routes/interactions"));
+app.use("/api/connection", require("./routes/connection"));
 
 // Error handling middleware
 app.use((err, req, res, next) => {

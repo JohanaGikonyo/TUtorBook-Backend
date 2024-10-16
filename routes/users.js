@@ -88,7 +88,7 @@ router.post("/register", async (req, res) => {
 // Login user
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
-
+  console.log(req.body);
   // Basic validation
   if (!email || !password) {
     return res.status(400).json({ error: "Email and password are required." });
@@ -107,6 +107,7 @@ router.post("/login", async (req, res) => {
 
     const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: "1h" });
     // Return the token in the response
+
     res.json({
       message: "Login successful",
       token, // JWT token sent to the frontend
@@ -130,8 +131,12 @@ router.post("/login", async (req, res) => {
 // Get all users
 router.get("/getUsers", async (req, res) => {
   try {
-    const users = await User.find(); // Adjust based on your actual User model method
-    res.json({ users });
+    const { page = 1, limit = 50 } = req.query; // Pagination params, default to page 1 and limit 10
+    const users = await User.find()
+      .skip((page - 1) * limit)
+      .limit(Number(limit));
+    const totalUsers = await User.countDocuments(); // Total users for frontend reference
+    res.json({ users, totalUsers });
   } catch (error) {
     console.error("Error fetching users:", error.message);
     res.status(500).json({ error: "Internal server error" });

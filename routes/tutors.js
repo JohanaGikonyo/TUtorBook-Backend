@@ -4,7 +4,10 @@ const Tutor = require("../models/Tutor");
 const multer = require("multer");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const nodemailer = require("nodemailer");
 const secretKey = process.env.JWT_SECRET || "qwerthjfds56";
+const EMAIL_USER = process.env.EMAIL_USER;
+const EMAIL_PASS = process.env.EMAIL_PASS;
 // Configure multer for file uploads (for photo and qualifications)
 const upload = multer({ dest: "uploads/" });
 
@@ -94,8 +97,19 @@ router.post("/login", async (req, res) => {
 
 router.get("/gettutors", async (req, res) => {
   try {
-    const tutors = await Tutor.find(); // Adjust based on your actual User model method
-    res.json(tutors);
+    const { page = 1, limit = 50 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const tutors = await Tutor.find().skip(skip).limit(Number(limit));
+
+    const totalTutors = await Tutor.countDocuments(); // Total number of tutors
+    const hasMore = skip + tutors.length < totalTutors; // Check if there's more data to load
+
+    res.json({
+      tutors,
+      hasMore,
+      totalTutors,
+    });
   } catch (error) {
     console.error("Error fetching tutors:", error.message);
     res.status(500).json({ error: "Internal server error" });
@@ -144,6 +158,37 @@ router.post("/editTutor/:tutor_id", async (req, res) => {
   } catch (error) {
     console.error("Error updating tutor:", error.message);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Email Sending Function
+router.post("/send-email", async (req, res) => {
+  const { tutorEmail, userEmail, selectedValue, userName, tutorname } = req.body;
+
+  try {
+    // Create a Nodemailer transporter (Gmail used here)
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: EMAIL_USER,
+        pass: EMAIL_PASS,
+      },
+    });
+
+    // Email message details
+    const mailOptions = {
+      from: userEmail, // User's email
+      to: tutorEmail, // Tutor's email
+      subject: `Tutoring Session Request: ${selectedValue}`,
+      text: `Hi ${tutorname},${userName} has requested a ${selectedValue} tutoring session with you. Kindly reach out.`,
+    };
+
+    // Send email
+    await transporter.sendMail(mailOptions);
+    res.status(200).send({ message: "Email sent successfully" });
+  } catch (error) {
+    console.error("Error sending email: ", error);
+    res.status(500).send({ message: "Error sending email" });
   }
 });
 
