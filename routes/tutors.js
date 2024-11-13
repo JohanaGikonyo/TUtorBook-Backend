@@ -166,7 +166,7 @@ router.post("/send-email", async (req, res) => {
   const { tutorEmail, userEmail, selectedValue, userName, tutorname } = req.body;
 
   try {
-    // Create a Nodemailer transporter (Gmail used here)
+    // Create a Nodemailer transporter
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -177,18 +177,19 @@ router.post("/send-email", async (req, res) => {
 
     // Email message details
     const mailOptions = {
-      from: userEmail, // User's email
-      to: tutorEmail, // Tutor's email
+      from: userEmail,
+      to: tutorEmail,
       subject: `Tutoring Session Request: ${selectedValue}`,
-      text: `Hi ${tutorname},${userName} has requested a ${selectedValue} tutoring session with you. Kindly reach out.`,
+      text: `Hi ${tutorname}, ${userName} has requested a ${selectedValue} tutoring session with you. Kindly reach out.`,
     };
 
-    // Send email
+    // Attempt to send the email
     await transporter.sendMail(mailOptions);
-    res.status(200).send({ message: "Email sent successfully" });
+    console.log("Email sent successfully to: ", tutorEmail);
+    return res.status(200).send({ message: "Email sent successfully" });
   } catch (error) {
-    console.error("Error sending email: ", error);
-    res.status(500).send({ message: "Error sending email" });
+    console.error("Error sending email: ", error.message);
+    return res.status(500).send({ message: "Error sending email", error: error.message });
   }
 });
 

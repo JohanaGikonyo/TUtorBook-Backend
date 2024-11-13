@@ -2,10 +2,12 @@ const express = require("express");
 const router = express.Router();
 const Connect = require("../models/connections");
 const User = require("../models/User");
-
+const nodemailer = require("nodemailer");
+const EMAIL_USER = process.env.EMAIL_USER;
+const EMAIL_PASS = process.env.EMAIL_PASS;
 // Send Connection Request
 router.post("/connect", async (req, res) => {
-  const { requesterId, targetId } = req.body;
+  const { requesterId, targetId, requesterName, targetName, targetEmail, requesterEmail } = req.body;
   console.log("requester Id: ", requesterId);
   try {
     // Check if the connection request already exists
@@ -30,6 +32,25 @@ router.post("/connect", async (req, res) => {
 
     await newConnection.save();
 
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: EMAIL_USER,
+        pass: EMAIL_PASS,
+      },
+    });
+    // Email message details
+    const mailOptions = {
+      from: requesterEmail,
+      to: targetEmail,
+      subject: `You have a new Connection Request`,
+      text: `Hi ${targetName},${requesterName} is requesting to connect. `,
+    };
+
+    // Send email
+    await transporter.sendMail(mailOptions);
+    res.status(200).send({ message: "Email sent successfully" });
+
     // Optionally, you can notify the target user (via email or real-time notification)
     res.status(201).json({ message: "Connection request sent successfully" });
   } catch (error) {
@@ -38,30 +59,73 @@ router.post("/connect", async (req, res) => {
   }
 });
 
-router.post("/accept", async (req, res) => {
-  const { requestId, userId } = req.body;
-  console.log(req.body);
-  try {
-    // Find the connection request
-    const connection = await Connect.findOne({
-      _id: requestId,
-      target: userId,
-      status: "pending",
-    });
+router.post("/connect", async (req, res) => {
+  const { requesterId, targetIds, requesterName, requesterEmail, targetNames, targetEmails } = req.body;
+  console.log("requester Id: ", requesterId);
 
-    if (!connection) {
-      return res.status(404).json({ error: "Connection request not found" });
+  try {
+    const results = [];
+    let responseSent = false; // Flag to track if response has been sent
+
+    for (let i = 0; i < targetIds.length; i++) {
+      const targetId = targetIds[i];
+      const targetName = targetNames[i];
+      const targetEmail = targetEmails[i];
+
+      try {
+        const existingConnection = await Connect.findOne({
+          requester: requesterId,
+          target: targetId,
+          status: "pending",
+        });
+
+        if (existingConnection) {
+          results.push({ targetId, message: "Connection request already sent" });
+          continue;
+        }
+
+        const newConnection = new Connect({
+          requester: requesterId,
+          target: targetId,
+          status: "pending",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+
+        await newConnection.save();
+
+        // Send the email
+        const transporter = nodemailer.createTransport({
+          service: "gmail",
+          auth: {
+            user: EMAIL_USER,
+            pass: EMAIL_PASS,
+          },
+        });
+
+        const mailOptions = {
+          from: requesterEmail,
+          to: targetEmail,
+          subject: `You have a new Connection Request`,
+          text: `Hi ${targetName},\n\n${requesterName} is requesting to connect.\n\nYou can accept the connection request by clicking the link below:\n\nhttp://localhost:8081/connect/ConnectionRequests\n\nThank you!`,
+        };
+
+        await transporter.sendMail(mailOptions);
+        results.push({ targetId, message: "Connection request sent successfully" });
+        console.log(`Email sent successfully to ${targetEmail}`);
+      } catch (error) {
+        console.error(`Error sending connection request for target ${targetId}:`, error.message);
+        results.push({ targetId, message: `Error sending connection request: ${error.message}` });
+      }
     }
 
-    // Update the connection status to "accepted"
-    connection.status = "accepted";
-    connection.updatedAt = new Date();
-    await connection.save();
-    console.log("Accepted Successfully!");
-    res.json({ message: "Connection request accepted" });
+    // Send the response once, after all requests are processed
+    if (!responseSent) {
+      return res.status(201).json({ results });
+    }
   } catch (error) {
-    console.error("Error accepting connection request:", error.message);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("Error sending connection requests:", error.message);
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
