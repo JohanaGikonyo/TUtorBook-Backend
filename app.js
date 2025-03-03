@@ -35,7 +35,12 @@ app.use("/api/tutors", require("./routes/tutors"));
 app.use("/api/images", require("./routes/images"));
 app.use("/api/interactions", require("./routes/interactions"));
 app.use("/api/connection", require("./routes/connection"));
-
+app.use("/api/message", require("./routes/message"));
+app.use("/api/chats", require("./routes/chats"));
+app.use("/api/meetings", require("./routes/meetingRoutes"));
+app.use("/api/video", require("./routes/videos"));
+app.use("/api", require("./routes/comments"));
+// app.use("/api", videoRoute);
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);

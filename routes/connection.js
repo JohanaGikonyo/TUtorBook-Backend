@@ -7,72 +7,23 @@ const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_PASS;
 // Send Connection Request
 router.post("/connect", async (req, res) => {
-  const { requesterId, targetId, requesterName, targetName, targetEmail, requesterEmail } = req.body;
-  console.log("requester Id: ", requesterId);
-  try {
-    // Check if the connection request already exists
-    const existingConnection = await Connect.findOne({
-      requester: requesterId,
-      target: targetId,
-      status: "pending",
-    });
+  const { requesterId, targetId, requesterName, requesterEmail, targetName, targetEmail } = req.body;
 
-    if (existingConnection) {
-      return res.status(400).json({ error: "Connection request already sent" });
-    }
-
-    // Create a new connection request
-    const newConnection = new Connect({
-      requester: requesterId,
-      target: targetId,
-      status: "pending",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    await newConnection.save();
-
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: EMAIL_USER,
-        pass: EMAIL_PASS,
-      },
-    });
-    // Email message details
-    const mailOptions = {
-      from: requesterEmail,
-      to: targetEmail,
-      subject: `You have a new Connection Request`,
-      text: `Hi ${targetName},${requesterName} is requesting to connect. `,
-    };
-
-    // Send email
-    await transporter.sendMail(mailOptions);
-    res.status(200).send({ message: "Email sent successfully" });
-
-    // Optionally, you can notify the target user (via email or real-time notification)
-    res.status(201).json({ message: "Connection request sent successfully" });
-  } catch (error) {
-    console.error("Error sending connection request:", error.message);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-router.post("/connect", async (req, res) => {
-  const { requesterId, targetIds, requesterName, requesterEmail, targetNames, targetEmails } = req.body;
-  console.log("requester Id: ", requesterId);
+  // If targetIds is a single value, convert it to an array for consistency
+  const targets = Array.isArray(targetId) ? targetId : [targetId];
+  const targetNamesArray = Array.isArray(targetName) ? targetName : [targetName];
+  const targetEmailsArray = Array.isArray(targetEmail) ? targetEmail : [targetEmail];
 
   try {
     const results = [];
-    let responseSent = false; // Flag to track if response has been sent
 
-    for (let i = 0; i < targetIds.length; i++) {
-      const targetId = targetIds[i];
-      const targetName = targetNames[i];
-      const targetEmail = targetEmails[i];
+    for (let i = 0; i < targets.length; i++) {
+      const targetId = targets[i];
+      const targetName = targetNamesArray[i];
+      const targetEmail = targetEmailsArray[i];
 
       try {
+        // Check if the connection request already exists
         const existingConnection = await Connect.findOne({
           requester: requesterId,
           target: targetId,
@@ -84,6 +35,7 @@ router.post("/connect", async (req, res) => {
           continue;
         }
 
+        // Create a new connection request
         const newConnection = new Connect({
           requester: requesterId,
           target: targetId,
@@ -114,18 +66,44 @@ router.post("/connect", async (req, res) => {
         results.push({ targetId, message: "Connection request sent successfully" });
         console.log(`Email sent successfully to ${targetEmail}`);
       } catch (error) {
-        console.error(`Error sending connection request for target ${targetId}:`, error.message);
+        console.error(`Error sending connection request for target ${targetEmail}:`, error.message);
         results.push({ targetId, message: `Error sending connection request: ${error.message}` });
       }
     }
 
     // Send the response once, after all requests are processed
-    if (!responseSent) {
-      return res.status(201).json({ results });
-    }
+    return res.status(201).json({ results });
   } catch (error) {
     console.error("Error sending connection requests:", error.message);
     return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/accept", async (req, res) => {
+  const { requestId, userId } = req.body;
+
+  try {
+    // Find the connection request
+    const connection = await Connect.findOne({
+      _id: requestId,
+      target: userId,
+      status: "pending",
+    });
+
+    if (!connection) {
+      return res.status(404).json({ error: "Connection request not found" });
+    }
+
+    // Update the connection status to "accepted"
+    connection.status = "accepted";
+    connection.updatedAt = new Date();
+    await connection.save();
+
+    // Optionally notify the requester that the connection was declined
+    res.json({ message: "Connection request Accepted" });
+  } catch (error) {
+    console.error("Error accepting connection request:", error.message);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -161,12 +139,12 @@ router.post("/decline", async (req, res) => {
 router.get("/requests/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
-    console.log("finding request for id: ", userId);
+    // console.log("finding request for id: ", userId);
     const requests = await Connect.find({
       target: userId,
       status: "pending",
     }).populate("requester", "photo name email");
-    console.log(requests);
+    // console.log(requests);
     res.status(200).json({ success: true, requests });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

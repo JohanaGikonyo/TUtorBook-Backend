@@ -128,15 +128,15 @@ router.post("/login", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-// Get all users
 router.get("/getUsers", async (req, res) => {
   try {
-    const { page = 1, limit = 50 } = req.query; // Pagination params, default to page 1 and limit 10
+    const { page = 1, limit = 4 } = req.query; // Pagination params, default to page 1 and limit 3
     const users = await User.find()
+      .lean()
       .skip((page - 1) * limit)
       .limit(Number(limit));
     const totalUsers = await User.countDocuments(); // Total users for frontend reference
-    res.json({ users, totalUsers });
+    res.json({ users, totalUsers, hasMore: page * limit < totalUsers }); // Check if more users exist
   } catch (error) {
     console.error("Error fetching users:", error.message);
     res.status(500).json({ error: "Internal server error" });

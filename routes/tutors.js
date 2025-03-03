@@ -10,7 +10,6 @@ const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_PASS;
 // Configure multer for file uploads (for photo and qualifications)
 const upload = multer({ dest: "uploads/" });
-
 // Register a new tutor
 router.post("/register", async (req, res) => {
   try {
@@ -97,10 +96,10 @@ router.post("/login", async (req, res) => {
 
 router.get("/gettutors", async (req, res) => {
   try {
-    const { page = 1, limit = 50 } = req.query;
+    const { page = 1, limit = 4 } = req.query;
     const skip = (page - 1) * limit;
 
-    const tutors = await Tutor.find().skip(skip).limit(Number(limit));
+    const tutors = await Tutor.find().lean().skip(skip).limit(Number(limit));
 
     const totalTutors = await Tutor.countDocuments(); // Total number of tutors
     const hasMore = skip + tutors.length < totalTutors; // Check if there's more data to load
@@ -165,6 +164,14 @@ router.post("/editTutor/:tutor_id", async (req, res) => {
 router.post("/send-email", async (req, res) => {
   const { tutorEmail, userEmail, selectedValue, userName, tutorname } = req.body;
 
+  // Input validation
+  if (!tutorEmail || !userEmail || !selectedValue || !userName || !tutorname) {
+    return res.status(400).json({
+      message: "Missing required fields",
+      requiredFields: ["tutorEmail", "userEmail", "selectedValue", "userName", "tutorname"],
+    });
+  }
+
   try {
     // Create a Nodemailer transporter
     const transporter = nodemailer.createTransport({
@@ -180,16 +187,32 @@ router.post("/send-email", async (req, res) => {
       from: userEmail,
       to: tutorEmail,
       subject: `Tutoring Session Request: ${selectedValue}`,
-      text: `Hi ${tutorname}, ${userName} has requested a ${selectedValue} tutoring session with you. Kindly reach out.`,
+      text: `Hi ${tutorname},\n\n${userName} has requested a ${selectedValue} tutoring session with you. Kindly reach out.\n\nBest regards,\n${userName}`,
     };
 
     // Attempt to send the email
     await transporter.sendMail(mailOptions);
-    console.log("Email sent successfully to: ", tutorEmail);
-    return res.status(200).send({ message: "Email sent successfully" });
+    console.log(`Email sent successfully to: ${tutorEmail}`);
+    return res.status(200).json({
+      message: "Email sent successfully",
+      recipient: tutorEmail,
+    });
   } catch (error) {
     console.error("Error sending email: ", error.message);
-    return res.status(500).send({ message: "Error sending email", error: error.message });
+
+    // Handle specific Nodemailer errors
+    if (error.code === "EAUTH" || error.code === "EENVELOPE") {
+      return res.status(400).json({
+        message: "Email sending failed due to invalid credentials or recipient address",
+        error: error.message,
+      });
+    }
+
+    // Generic error response
+    return res.status(500).json({
+      message: "Internal server error while sending email",
+      error: error.message,
+    });
   }
 });
 
