@@ -5,6 +5,11 @@ const http = require("http");
 const socketIo = require("socket.io");
 const bodyParser = require("body-parser");
 const cors = require("cors");
+const videoRoute = require("./routes/video.js");
+const commentRoute = require("./routes/comments.js");
+const userRoute = require("./routes/users.js");
+const meetingRoutes = require("./routes/meetingRoutes.js");
+
 require("dotenv").config();
 
 const app = express();
@@ -30,17 +35,16 @@ mongoose
 
 // Routes
 app.use("/api/users", require("./routes/users"));
-app.use("/api/videos", require("./routes/videos"));
 app.use("/api/tutors", require("./routes/tutors"));
 app.use("/api/images", require("./routes/images"));
 app.use("/api/interactions", require("./routes/interactions"));
 app.use("/api/connection", require("./routes/connection"));
 app.use("/api/message", require("./routes/message"));
 app.use("/api/chats", require("./routes/chats"));
-app.use("/api/meetings", require("./routes/meetingRoutes"));
-app.use("/api/video", require("./routes/videos"));
-app.use("/api", require("./routes/comments"));
-// app.use("/api", videoRoute);
+app.use("/api/meetings", meetingRoutes);
+app.use("/api/video", videoRoute);
+app.use("/api", commentRoute);
+app.use("/api/users", userRoute);
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);

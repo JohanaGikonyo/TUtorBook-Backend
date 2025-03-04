@@ -515,15 +515,14 @@ const addView = async (req, res, next) => {
   }
 };
 module.exports = {
-  // addVideo,
-  addView,
-  like,
-  dislike,
-  subscribe,
-  unsubscribe,
   postVideo,
   getFile,
+  getVideos,
   updateVideo,
-  postVideo,
   deleteVideo,
+  subscribe,
+  unsubscribe,
+  like,
+  dislike,
+  addView,
 };
